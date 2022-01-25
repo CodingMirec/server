@@ -3,6 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Messages from "./dbMessages.js";
 import Pusher from "pusher";
+import cors from "cors";
 
 // app config
 const app = express();
@@ -18,9 +19,10 @@ const pusher = new Pusher({
 
 // middleware
 app.use(express.json());
+app.use(cors());
 
 // DB config
-const connection_url = `mongodb+srv://admin:Sp412250@cluster0.rnrvo.mongodb.net/messagepp?retryWrites=true&w=majority`;
+const connection_url = `mongodb://admin:SP412250@cluster0-shard-00-00.rnrvo.mongodb.net:27017,cluster0-shard-00-01.rnrvo.mongodb.net:27017,cluster0-shard-00-02.rnrvo.mongodb.net:27017/messageapp?ssl=true&replicaSet=atlas-9as9if-shard-0&authSource=admin&retryWrites=true&w=majority`;
 
 mongoose.connect(connection_url, {
   useNewUrlParser: true,
@@ -34,11 +36,23 @@ const db = mongoose.connection;
 db.once("open", () => {
   console.log("DB connected ");
 
-  const msgCollection = db.collection("messagecontent");
+  const msgCollection = db.collection("messagecontents");
   const changeStream = msgCollection.watch();
 
   changeStream.on("change", (change) => {
     console.log(change);
+
+    if (change.operationType === "insert") {
+      const messageDetails = change.fullDocument;
+      pusher.trigger("messages", "inserted", {
+        name: messageDetails.name,
+        message: messageDetails.message,
+        timestamp: messageDetails.timestamp,
+        received: messageDetails.received,
+      });
+    } else {
+      console.log("Error triggering Pusher");
+    }
   });
 });
 
